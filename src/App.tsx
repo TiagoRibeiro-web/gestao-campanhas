@@ -95,6 +95,7 @@ const App: React.FC = () => {
   const [campanhas, setCampanhas] = useState<Campanha[]>([]);
   const [filtroBolsa, setFiltroBolsa] = useState('todas');
   const [filtroPeriodo, setFiltroPeriodo] = useState('todos');
+  const [filtroZerado, setFiltroZerado] = useState('todos'); // 🔥 NOVO FILTRO
   const [busca, setBusca] = useState('');
   const [modalAberto, setModalAberto] = useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -343,11 +344,23 @@ const App: React.FC = () => {
     setEditandoId(null);
   };
 
+  // ===== FILTROS =====
   const campanhasFiltradas = campanhas.filter(camp => {
     const matchBolsa = filtroBolsa === 'todas' || camp.bolsa === filtroBolsa;
     const matchPeriodo = filtroPeriodo === 'todos' || camp.periodo.includes(filtroPeriodo);
     const matchBusca = camp.nome.toLowerCase().includes(busca.toLowerCase());
-    return matchBolsa && matchPeriodo && matchBusca;
+    
+    // 🔥 NOVO FILTRO: Realizado Zerado
+    let matchZerado = true;
+    if (filtroZerado === 'midia') {
+      matchZerado = camp.realizadoMidia === 0;
+    } else if (filtroZerado === 'producao') {
+      matchZerado = camp.realizadoProd === 0;
+    } else if (filtroZerado === 'ambos') {
+      matchZerado = camp.realizadoMidia === 0 && camp.realizadoProd === 0;
+    }
+    
+    return matchBolsa && matchPeriodo && matchBusca && matchZerado;
   });
 
   const totais = {
@@ -726,7 +739,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* ===== FILTROS E AÇÕES (MOVIDOS PARA CIMA - ANTES DO GRÁFICO) ===== */}
+        {/* ===== FILTROS E AÇÕES (COM O NOVO FILTRO) ===== */}
         <div style={{
           background: colors.surface,
           borderRadius: '16px',
@@ -743,7 +756,8 @@ const App: React.FC = () => {
             alignItems: 'flex-end'
           }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', flex: 1 }}>
-              <div style={{ flex: '1 1 240px', minWidth: '200px' }}>
+              {/* Busca */}
+              <div style={{ flex: '1 1 200px', minWidth: '180px' }}>
                 <label style={{
                   display: 'block',
                   fontSize: '12px',
@@ -753,46 +767,27 @@ const App: React.FC = () => {
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px'
                 }}>
-                  Buscar Campanha
+                  🔍 Buscar
                 </label>
-                <div style={{ position: 'relative' }}>
-                  <svg style={{
-                    position: 'absolute',
-                    left: '14px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    pointerEvents: 'none'
-                  }} width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M15.5 14H14.71L14.43 13.73C15.41 12.59 16 11.11 16 9.5C16 5.91 13.09 3 9.5 3C5.91 3 3 5.91 3 9.5C3 13.09 5.91 16 9.5 16C11.11 16 12.59 15.41 13.73 14.43L14 14.71V15.5L19 20.49L20.49 19L15.5 14ZM9.5 14C7.01 14 5 11.99 5 9.5C5 7.01 7.01 5 9.5 5C11.99 5 14 7.01 14 9.5C14 11.99 11.99 14 9.5 14Z" fill={colors.textSecondary}/>
-                  </svg>
-                  <input
-                    type="text"
-                    value={busca}
-                    onChange={(e) => setBusca(e.target.value)}
-                    placeholder="Digite o nome..."
-                    style={{
-                      width: '100%',
-                      border: `1.5px solid ${colors.border}`,
-                      borderRadius: '10px',
-                      padding: '10px 14px 10px 42px',
-                      fontSize: '14px',
-                      transition: 'all 0.2s ease',
-                      backgroundColor: colors.background,
-                      color: colors.text,
-                      outline: 'none'
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = colors.primary;
-                      e.currentTarget.style.boxShadow = `0 0 0 3px ${colors.primary}20`;
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = colors.border;
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                  />
-                </div>
+                <input
+                  type="text"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Nome da campanha..."
+                  style={{
+                    width: '100%',
+                    border: `1.5px solid ${colors.border}`,
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    fontSize: '14px',
+                    backgroundColor: colors.background,
+                    outline: 'none'
+                  }}
+                />
               </div>
-              <div style={{ flex: '0 1 180px', minWidth: '150px' }}>
+
+              {/* Bolsa */}
+              <div style={{ flex: '0 1 150px', minWidth: '130px' }}>
                 <label style={{
                   display: 'block',
                   fontSize: '12px',
@@ -802,7 +797,7 @@ const App: React.FC = () => {
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px'
                 }}>
-                  Bolsa
+                  🏷️ Bolsa
                 </label>
                 <select
                   value={filtroBolsa}
@@ -814,7 +809,6 @@ const App: React.FC = () => {
                     padding: '10px 14px',
                     fontSize: '14px',
                     backgroundColor: colors.background,
-                    color: colors.text,
                     cursor: 'pointer',
                     outline: 'none'
                   }}
@@ -825,7 +819,9 @@ const App: React.FC = () => {
                   <option value="Avulsa">Avulsa</option>
                 </select>
               </div>
-              <div style={{ flex: '0 1 180px', minWidth: '150px' }}>
+
+              {/* Período */}
+              <div style={{ flex: '0 1 150px', minWidth: '130px' }}>
                 <label style={{
                   display: 'block',
                   fontSize: '12px',
@@ -835,7 +831,7 @@ const App: React.FC = () => {
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px'
                 }}>
-                  Período
+                  📅 Período
                 </label>
                 <select
                   value={filtroPeriodo}
@@ -847,7 +843,6 @@ const App: React.FC = () => {
                     padding: '10px 14px',
                     fontSize: '14px',
                     backgroundColor: colors.background,
-                    color: colors.text,
                     cursor: 'pointer',
                     outline: 'none'
                   }}
@@ -859,7 +854,43 @@ const App: React.FC = () => {
                   <option value="Q4">Q4</option>
                 </select>
               </div>
+
+              {/* 🔥 NOVO FILTRO: Realizado Zerado */}
+              <div style={{ flex: '0 1 170px', minWidth: '150px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: colors.textSecondary,
+                  marginBottom: '8px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  ⚠️ Realizado Zerado
+                </label>
+                <select
+                  value={filtroZerado}
+                  onChange={(e) => setFiltroZerado(e.target.value)}
+                  style={{
+                    width: '100%',
+                    border: `1.5px solid ${colors.border}`,
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    fontSize: '14px',
+                    backgroundColor: colors.background,
+                    cursor: 'pointer',
+                    outline: 'none'
+                  }}
+                >
+                  <option value="todos">Todos</option>
+                  <option value="midia">📺 Mídia Zerada</option>
+                  <option value="producao">🏭 Produção Zerada</option>
+                  <option value="ambos">⚠️ Ambos Zerados</option>
+                </select>
+              </div>
             </div>
+
+            {/* Botões de ação */}
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <label style={{
                 display: 'inline-flex',
@@ -887,6 +918,7 @@ const App: React.FC = () => {
                 Importar
                 <input type="file" accept=".xlsx, .xls" onChange={importarExcel} style={{ display: 'none' }} />
               </label>
+
               <button
                 onClick={sincronizarSharePoint}
                 disabled={carregando}
@@ -1000,6 +1032,7 @@ const App: React.FC = () => {
                 </svg>
                 Resetar
               </button>
+
               <button
                 onClick={abrirModalNovo}
                 style={{
@@ -1034,7 +1067,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* ===== GRÁFICO DE ANÁLISE POR TRIMESTRE (AGORA ABAIXO DOS FILTROS) ===== */}
+        {/* ===== GRÁFICO ===== */}
         <div style={{
           background: colors.surface,
           borderRadius: '16px',
@@ -1108,7 +1141,6 @@ const App: React.FC = () => {
 
             return (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                {/* Gráfico de Barras */}
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: `repeat(${periodos.length}, 1fr)`,
@@ -1207,7 +1239,6 @@ const App: React.FC = () => {
                   })}
                 </div>
 
-                {/* Cards de Resumo por Trimestre */}
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: `repeat(${periodos.length}, 1fr)`,
@@ -1278,7 +1309,7 @@ const App: React.FC = () => {
           })()}
         </div>
 
-        {/* ===== TABELA DE CAMPANHAS ===== */}
+        {/* ===== TABELA ===== */}
         <div style={{
           background: colors.surface,
           borderRadius: '16px',
@@ -1534,7 +1565,7 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Barra de progresso da Taxa de Execução */}
+          {/* Barra de progresso */}
           <div style={{
             background: colors.surface,
             borderRadius: '10px',
@@ -1748,6 +1779,7 @@ const App: React.FC = () => {
             }}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Modal content (mantido igual ao seu código) */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -1799,8 +1831,8 @@ const App: React.FC = () => {
               </button>
             </div>
 
+            {/* Restante do modal... (mantido igual ao seu código) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* ... resto do modal (mantido igual) ... */}
               <div>
                 <label style={{
                   display: 'block',
