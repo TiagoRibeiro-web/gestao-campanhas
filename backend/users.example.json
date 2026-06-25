@@ -1,0 +1,12 @@
+{
+  "users": [
+    {
+      "username": "usuario1@empresa.com",
+      "password": "substitua_pela_senha_real"
+    },
+    {
+      "username": "usuario2@empresa.com",
+      "password": "substitua_pela_senha_real"
+    }
+  ]
+}

@@ -6,6 +6,8 @@ const { TokenCredentialAuthenticationProvider } = require('@microsoft/microsoft-
 const { ClientSecretCredential } = require('@azure/identity');
 const XLSX = require('xlsx');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -67,6 +69,21 @@ async function uploadFileWithAxios(driveId, itemId, buffer, accessToken) {
     }
   });
   return response.data;
+}
+
+// ============ FUNÇÃO DE AUTENTICAÇÃO ============
+
+// Função para ler usuários do arquivo JSON
+function getUsers() {
+  try {
+    const usersPath = path.join(__dirname, 'users.json');
+    const data = fs.readFileSync(usersPath, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('❌ Erro ao ler users.json:', error.message);
+    // Se o arquivo não existir, retorna um array vazio
+    return { users: [] };
+  }
 }
 
 // ============ FUNÇÕES PARA DESBLOQUEAR ARQUIVO ============
@@ -323,36 +340,83 @@ async function writeExcelToSharePoint(campanhas, fileUrl) {
 
 // ============ ENDPOINTS DA API ============
 
+// ============ ENDPOINT DE LOGIN ============
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  
+  console.log('🔐 Tentativa de login:', username);
+  
+  if (!username || !password) {
+    return res.status(400).json({
+      success: false,
+      error: 'Usuário e senha são obrigatórios'
+    });
+  }
+  
+  try {
+    const { users } = getUsers();
+    
+    const found = users.find(u => 
+      u.username.toLowerCase() === username.toLowerCase() && 
+      u.password === password
+    );
+    
+    if (found) {
+      console.log('✅ Login bem-sucedido:', username);
+      res.json({ 
+        success: true, 
+        user: username,
+        message: 'Login realizado com sucesso!'
+      });
+    } else {
+      console.log('❌ Falha no login:', username);
+      res.status(401).json({ 
+        success: false, 
+        error: 'Credenciais inválidas. Verifique seu usuário e senha.' 
+      });
+    }
+  } catch (error) {
+    console.error('❌ Erro ao validar usuário:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Erro interno ao validar credenciais' 
+    });
+  }
+});
+
+// Endpoint para listar usuários (apenas para debug)
+app.get('/api/usuarios', async (req, res) => {
+  try {
+    const { users } = getUsers();
+    // Retorna apenas os nomes de usuário (sem as senhas)
+    const usuarios = users.map(u => ({ username: u.username }));
+    res.json({ success: true, usuarios });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ ENDPOINTS DO SHAREPOINT ============
+
 app.post('/api/buscar-planilha', async (req, res) => {
   console.log('📥 /buscar-planilha');
   const result = await getExcelFromSharePoint(req.body.fileUrl);
   
   if (result.success) {
-    // 🔍 LOG DE DEBUG - Mostra as colunas da primeira linha
     if (result.data.length > 0) {
       console.log('\n📋 COLUNAS ENCONTRADAS:');
       const keys = Object.keys(result.data[0]);
       keys.forEach((key, index) => {
         console.log(`   ${index}: "${key}"`);
       });
-      
-      console.log('\n📊 PRIMEIRA LINHA (valores):');
-      const values = Object.values(result.data[0]);
-      values.forEach((value, index) => {
-        console.log(`   ${index}: "${value}"`);
-      });
-      console.log('');
     }
     
     const mappedData = result.data.map((row, idx) => {
-      // 🔍 MAPEAMENTO FLEXÍVEL COM TODAS AS VARIAÇÕES
       const nome = row["Projeto/Campanha"] || row["Projeto"] || row["Campanha"] || `Item ${idx + 1}`;
       
-      // Mídia
       const planejadoMidia = Number(row["Valor Planejado Mídia/Projeto"] || row["Planejado Mídia"] || row["Planejado Mídia/Projeto"] || 0);
       const realizadoMidia = Number(row["Valor Realizado Mídia/Projeto"] || row["Realizado Mídia"] || row["Realizado Mídia/Projeto"] || 0);
       
-      // 🔥 PRODUÇÃO - TODAS AS VARIAÇÕES POSSÍVEIS
       const planejadoProd = Number(
         row["Valor Planejado Prod"] || 
         row["Valor Planejado  Prod"] || 
@@ -364,26 +428,18 @@ app.post('/api/buscar-planilha', async (req, res) => {
       
       const realizadoProd = Number(
         row["Valor Realizado Prod"] || 
-        row["Valor Realizado  Prod"] ||  // ⚠️ ATENÇÃO AOS DOIS ESPAÇOS!
+        row["Valor Realizado  Prod"] ||
         row["Realizado Prod"] || 
         row["Realizado Produção"] ||
         row["Valor Realizado Produção"] ||
         0
       );
       
-      // Saldos (da planilha ou calculados)
       const saldoMidia = Number(row["Saldo Mídia/Projeto"] || row["Saldo Mídia"] || (planejadoMidia - realizadoMidia));
       const saldoProd = Number(row["Saldo Prod"] || row["Saldo Produção"] || (planejadoProd - realizadoProd));
       
       const bolsa = row["Bolsa"] || row["Tipo"] || "Avulsa";
       const periodo = row["Período"] || row["Periodo"] || "Q1";
-      
-      // 🔍 LOG PARA CADA CAMPANHA (só as primeiras 3 para não poluir)
-      if (idx < 3) {
-        console.log(`📊 ${nome}:`);
-        console.log(`   Planejado Prod: ${planejadoProd} (raw: "${row["Valor Planejado Prod"] || row["Valor Planejado  Prod"] || 'não encontrado'}")`);
-        console.log(`   Realizado Prod: ${realizadoProd} (raw: "${row["Valor Realizado Prod"] || row["Valor Realizado  Prod"] || 'não encontrado'}")`);
-      }
       
       return {
         id: `sp_${Date.now()}_${idx}`,
@@ -400,9 +456,6 @@ app.post('/api/buscar-planilha', async (req, res) => {
     });
     
     console.log(`✅ ${mappedData.length} campanhas convertidas`);
-    if (mappedData.length > 0) {
-      console.log('📊 EXEMPLO (primeira campanha):', JSON.stringify(mappedData[0], null, 2));
-    }
     
     res.json({ 
       success: true, 
@@ -472,12 +525,14 @@ app.get('/api/listar-arquivos', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'online',
-    version: '2.0.4',
+    version: '2.0.5',
     endpoints: {
-      buscar: 'POST /api/buscar-planilha (com debug)',
+      login: 'POST /api/login',
+      buscar: 'POST /api/buscar-planilha',
       salvar: 'POST /api/salvar-campanhas',
       desbloquear: 'POST /api/desbloquear-arquivo',
-      listar: 'GET /api/listar-arquivos'
+      listar: 'GET /api/listar-arquivos',
+      health: 'GET /api/health'
     }
   });
 });
@@ -485,9 +540,10 @@ app.get('/api/health', (req, res) => {
 app.listen(PORT, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════════════════╗
-║  🚀 SICOOB COCRED - BACKEND v2.0.4                                  ║
+║  🚀 SICOOB COCRED - BACKEND v2.0.5                                  ║
 ║  📡 Servidor: http://localhost:${PORT}                               ║
-║  📊 POST /api/buscar-planilha (COM DEBUG!)                         ║
+║  🔐 POST /api/login                                                 ║
+║  📊 POST /api/buscar-planilha                                       ║
 ║  ✏️ POST /api/salvar-campanhas                                      ║
 ║  🔓 POST /api/desbloquear-arquivo                                   ║
 ║  📁 GET  /api/listar-arquivos                                       ║
@@ -499,9 +555,5 @@ app.listen(PORT, () => {
   console.log(`   📁 File ID: ${FILE_ID}`);
   console.log(`   📑 Aba alvo: ${SHEET_NAME}`);
   console.log(`   🔑 Client ID: ${process.env.CLIENT_ID?.substring(0, 10)}...`);
-  console.log(`\n🔍 Modo DEBUG ativado!`);
-  console.log(`   Ao sincronizar, o terminal vai mostrar:`);
-  console.log(`   📋 Colunas encontradas na planilha`);
-  console.log(`   📊 Valores da primeira linha`);
-  console.log(`   🔎 Busca por variações de nome de coluna`);
+  console.log(`\n🔐 Autenticação via backend/users.json`);
 });
