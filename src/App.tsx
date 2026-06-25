@@ -149,72 +149,67 @@ const App: React.FC = () => {
   };
 
   // Função para sincronizar com SharePoint
-// Função para sincronizar com SharePoint (JÁ ESTÁ CORRETA)
-const sincronizarSharePoint = async () => {
-  setCarregando(true);
-  try {
-    const response = await fetch('http://localhost:3002/api/buscar-planilha', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    const result = await response.json();
-    
-    if (result.success && result.data) {
-      setCampanhas(result.data);
-      localStorage.setItem('campanhas', JSON.stringify(result.data));
-      alert(`✅ ${result.data.length} campanhas carregadas do SharePoint!`);
-    } else {
-      alert(`❌ Erro: ${result.error}`);
+  const sincronizarSharePoint = async () => {
+    setCarregando(true);
+    try {
+      const response = await fetch('http://localhost:3002/api/buscar-planilha', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        setCampanhas(result.data);
+        localStorage.setItem('campanhas', JSON.stringify(result.data));
+        alert(`✅ ${result.data.length} campanhas carregadas do SharePoint!`);
+      } else {
+        alert(`❌ Erro: ${result.error}`);
+      }
+    } catch (error) {
+      alert('❌ Erro ao conectar com o servidor.');
+    } finally {
+      setCarregando(false);
     }
-  } catch (error) {
-    alert('❌ Erro ao conectar com o servidor.');
-  } finally {
-    setCarregando(false);
-  }
-};
+  };
 
-// Função para SALVAR campanhas no Excel
-const salvarNoExcel = async () => {
-  setCarregando(true);
-  try {
-    console.log('💾 Salvando campanhas no Excel...');
-    
-    // Preparar os dados no formato correto
-    const dadosParaSalvar = campanhas.map(({ id, ...rest }) => ({
-      nome: rest.nome,
-      planejadoMidia: rest.planejadoMidia,
-      realizadoMidia: rest.realizadoMidia,
-      saldoMidia: rest.saldoMidia,
-      planejadoProd: rest.planejadoProd,
-      realizadoProd: rest.realizadoProd,
-      saldoProd: rest.saldoProd,
-      bolsa: rest.bolsa,
-      periodo: rest.periodo
-    }));
+  // Função para SALVAR campanhas no Excel
+  const salvarNoExcel = async () => {
+    setCarregando(true);
+    try {
+      console.log('💾 Salvando campanhas no Excel...');
+      
+      const dadosParaSalvar = campanhas.map(({ id, ...rest }) => ({
+        nome: rest.nome,
+        planejadoMidia: rest.planejadoMidia,
+        realizadoMidia: rest.realizadoMidia,
+        saldoMidia: rest.saldoMidia,
+        planejadoProd: rest.planejadoProd,
+        realizadoProd: rest.realizadoProd,
+        saldoProd: rest.saldoProd,
+        bolsa: rest.bolsa,
+        periodo: rest.periodo
+      }));
 
-    // Enviar no formato esperado pelo backend
-    const response = await fetch('http://localhost:3002/api/salvar-campanhas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        campanhas: dadosParaSalvar  // <-- A CHAVE CORRETA É "campanhas"
-      })
-    });
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      alert(`✅ ${result.totalRows} campanhas salvas com sucesso no Excel!`);
-    } else {
-      alert(`❌ Erro ao salvar: ${result.error}`);
+      const response = await fetch('http://localhost:3002/api/salvar-campanhas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campanhas: dadosParaSalvar })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        alert(`✅ ${result.totalRows} campanhas salvas com sucesso no Excel!`);
+      } else {
+        alert(`❌ Erro ao salvar: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Erro ao salvar no Excel:', error);
+      alert('❌ Erro ao conectar com o servidor. Verifique se o backend está rodando.');
+    } finally {
+      setCarregando(false);
     }
-  } catch (error) {
-    console.error('Erro ao salvar no Excel:', error);
-    alert('❌ Erro ao conectar com o servidor. Verifique se o backend está rodando.');
-  } finally {
-    setCarregando(false);
-  }
-};
+  };
 
   const resetarDados = () => {
     if (window.confirm('Resetar para as 41 campanhas originais?')) {
@@ -393,7 +388,7 @@ const salvarNoExcel = async () => {
       backgroundColor: colors.background,
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     }}>
-      {/* Header com identidade Sicoob Cocred */}
+      {/* Header */}
       <header style={{
         background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.primaryDark} 100%)`,
         color: colors.surface,
@@ -507,7 +502,7 @@ const salvarNoExcel = async () => {
         margin: '0 auto',
         padding: '32px'
       }}>
-        {/* Cards de Resumo com design moderno */}
+        {/* ===== CARDS DE RESUMO ===== */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
@@ -731,280 +726,7 @@ const salvarNoExcel = async () => {
           </div>
         </div>
 
-        {/* GRÁFICO DE ANÁLISE POR TRIMESTRE */}
-        <div style={{
-          background: colors.surface,
-          borderRadius: '16px',
-          padding: '28px',
-          marginBottom: '24px',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
-          border: `1px solid ${colors.border}`
-        }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '24px',
-            flexWrap: 'wrap',
-            gap: '12px'
-          }}>
-            <div>
-              <h3 style={{
-                fontSize: '18px',
-                fontWeight: '700',
-                color: colors.text,
-                margin: 0
-              }}>
-                📊 Análise por Trimestre
-              </h3>
-              <p style={{
-                fontSize: '13px',
-                color: colors.textSecondary,
-                margin: '4px 0 0 0'
-              }}>
-                Comparativo de Planejado vs Realizado por período
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: colors.primary }} />
-                <span style={{ fontSize: '12px', color: colors.textSecondary }}>Planejado</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: colors.accent }} />
-                <span style={{ fontSize: '12px', color: colors.textSecondary }}>Realizado</span>
-              </div>
-            </div>
-          </div>
-
-          {(() => {
-            const periodos = ['Q1', 'Q2', 'Q3', 'Q4'];
-            const dadosPorPeriodo = periodos.map(periodo => {
-              const campanhasPeriodo = campanhasFiltradas.filter(c => c.periodo.includes(periodo));
-              
-              const planejadoMidia = campanhasPeriodo.reduce((sum, c) => sum + c.planejadoMidia, 0);
-              const realizadoMidia = campanhasPeriodo.reduce((sum, c) => sum + c.realizadoMidia, 0);
-              const planejadoProd = campanhasPeriodo.reduce((sum, c) => sum + c.planejadoProd, 0);
-              const realizadoProd = campanhasPeriodo.reduce((sum, c) => sum + c.realizadoProd, 0);
-              
-              const totalPlanejado = planejadoMidia + planejadoProd;
-              const totalRealizado = realizadoMidia + realizadoProd;
-              const taxaExecucao = totalPlanejado > 0 ? (totalRealizado / totalPlanejado) * 100 : 0;
-              
-              return {
-                periodo,
-                planejadoMidia,
-                realizadoMidia,
-                planejadoProd,
-                realizadoProd,
-                totalPlanejado,
-                totalRealizado,
-                taxaExecucao,
-                totalCampanhas: campanhasPeriodo.length
-              };
-            });
-
-            const maxValor = Math.max(
-              ...dadosPorPeriodo.flatMap(d => [d.totalPlanejado, d.totalRealizado])
-            ) * 1.2 || 1000000;
-
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                {/* Gráfico de Barras */}
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${periodos.length}, 1fr)`,
-                  gap: '16px',
-                  alignItems: 'flex-end',
-                  minHeight: '260px'
-                }}>
-                  {dadosPorPeriodo.map((dados, index) => {
-                    const alturaPlanejado = (dados.totalPlanejado / maxValor) * 180;
-                    const alturaRealizado = (dados.totalRealizado / maxValor) * 180;
-                    const isEstourado = dados.totalRealizado > dados.totalPlanejado;
-                    const status = getStatusExecucao(dados.taxaExecucao, colors);
-
-                    return (
-                      <div key={dados.periodo} style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        height: '100%',
-                        justifyContent: 'flex-end'
-                      }}>
-                        {/* Barras */}
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'flex-end',
-                          gap: '6px',
-                          height: '200px',
-                          width: '100%',
-                          justifyContent: 'center',
-                          position: 'relative'
-                        }}>
-                          {/* Barra do Planejado */}
-                          <div style={{
-                            width: '32px',
-                            background: colors.primary,
-                            height: `${Math.max(alturaPlanejado, 4)}px`,
-                            borderRadius: '6px 6px 0 0',
-                            transition: 'height 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                            position: 'relative',
-                            boxShadow: '0 2px 8px rgba(0, 150, 94, 0.2)',
-                            minHeight: '4px'
-                          }}>
-                            <div style={{
-                              position: 'absolute',
-                              top: '-20px',
-                              left: '50%',
-                              transform: 'translateX(-50%)',
-                              fontSize: '10px',
-                              fontWeight: '700',
-                              color: colors.primary,
-                              whiteSpace: 'nowrap'
-                            }}>
-                              R$ {dados.totalPlanejado.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-                            </div>
-                          </div>
-
-                          {/* Barra do Realizado */}
-                          <div style={{
-                            width: '32px',
-                            background: isEstourado ? colors.danger : colors.accent,
-                            height: `${Math.max(alturaRealizado, 4)}px`,
-                            borderRadius: '6px 6px 0 0',
-                            transition: 'height 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.1s',
-                            position: 'relative',
-                            boxShadow: `0 2px 8px ${isEstourado ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 205, 0, 0.3)'}`,
-                            minHeight: '4px'
-                          }}>
-                            <div style={{
-                              position: 'absolute',
-                              top: '-20px',
-                              left: '50%',
-                              transform: 'translateX(-50%)',
-                              fontSize: '10px',
-                              fontWeight: '700',
-                              color: isEstourado ? colors.danger : colors.accentDark,
-                              whiteSpace: 'nowrap'
-                            }}>
-                              R$ {dados.totalRealizado.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Label do período */}
-                        <div style={{
-                          marginTop: '12px',
-                          textAlign: 'center',
-                          width: '100%'
-                        }}>
-                          <div style={{
-                            fontSize: '16px',
-                            fontWeight: '700',
-                            color: colors.text
-                          }}>
-                            {dados.periodo}
-                          </div>
-                          <div style={{
-                            fontSize: '11px',
-                            color: colors.textSecondary,
-                            marginTop: '2px'
-                          }}>
-                            {dados.totalCampanhas} campanhas
-                          </div>
-                          <div style={{
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            color: status.cor,
-                            marginTop: '4px',
-                            padding: '2px 8px',
-                            background: status.bg,
-                            borderRadius: '12px',
-                            display: 'inline-block'
-                          }}>
-                            {status.emoji} {dados.taxaExecucao.toFixed(1)}%
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Cards de Resumo por Trimestre */}
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${periodos.length}, 1fr)`,
-                  gap: '12px',
-                  marginTop: '8px'
-                }}>
-                  {dadosPorPeriodo.map((dados) => {
-                    const status = getStatusExecucao(dados.taxaExecucao, colors);
-                    return (
-                      <div key={dados.periodo} style={{
-                        background: colors.background,
-                        borderRadius: '10px',
-                        padding: '14px',
-                        border: `1px solid ${colors.border}`
-                      }}>
-                        <div style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          marginBottom: '8px'
-                        }}>
-                          <span style={{ fontSize: '12px', fontWeight: '600', color: colors.text }}>
-                            {dados.periodo}
-                          </span>
-                          <span style={{
-                            fontSize: '11px',
-                            padding: '2px 10px',
-                            borderRadius: '12px',
-                            background: status.bg,
-                            color: status.cor,
-                            fontWeight: '600'
-                          }}>
-                            {status.emoji} {dados.taxaExecucao.toFixed(0)}%
-                          </span>
-                        </div>
-                        <div style={{
-                          display: 'grid',
-                          gridTemplateColumns: '1fr 1fr',
-                          gap: '4px',
-                          fontSize: '11px'
-                        }}>
-                          <span style={{ color: colors.textSecondary }}>📊 Planejado:</span>
-                          <span style={{ fontWeight: '600', textAlign: 'right', color: colors.primary }}>
-                            R$ {dados.totalPlanejado.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-                          </span>
-                          <span style={{ color: colors.textSecondary }}>✅ Realizado:</span>
-                          <span style={{ 
-                            fontWeight: '600', 
-                            textAlign: 'right',
-                            color: dados.totalRealizado > dados.totalPlanejado ? colors.danger : colors.success
-                          }}>
-                            R$ {dados.totalRealizado.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-                          </span>
-                          <span style={{ color: colors.textSecondary }}>💵 Saldo:</span>
-                          <span style={{ 
-                            fontWeight: '700', 
-                            textAlign: 'right',
-                            color: (dados.totalPlanejado - dados.totalRealizado) >= 0 ? colors.success : colors.danger
-                          }}>
-                            {((dados.totalPlanejado - dados.totalRealizado) >= 0 ? '+' : '')}
-                            R$ {(dados.totalPlanejado - dados.totalRealizado).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-
-        {/* Barra de Filtros e Ações */}
+        {/* ===== FILTROS E AÇÕES (MOVIDOS PARA CIMA - ANTES DO GRÁFICO) ===== */}
         <div style={{
           background: colors.surface,
           borderRadius: '16px',
@@ -1312,7 +1034,251 @@ const salvarNoExcel = async () => {
           </div>
         </div>
 
-        {/* Tabela de Campanhas */}
+        {/* ===== GRÁFICO DE ANÁLISE POR TRIMESTRE (AGORA ABAIXO DOS FILTROS) ===== */}
+        <div style={{
+          background: colors.surface,
+          borderRadius: '16px',
+          padding: '28px',
+          marginBottom: '24px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+          border: `1px solid ${colors.border}`
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '24px',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: '700',
+                color: colors.text,
+                margin: 0
+              }}>
+                📊 Análise por Trimestre
+              </h3>
+              <p style={{
+                fontSize: '13px',
+                color: colors.textSecondary,
+                margin: '4px 0 0 0'
+              }}>
+                Comparativo de Planejado vs Realizado por período
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: colors.primary }} />
+                <span style={{ fontSize: '12px', color: colors.textSecondary }}>Planejado</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: colors.accent }} />
+                <span style={{ fontSize: '12px', color: colors.textSecondary }}>Realizado</span>
+              </div>
+            </div>
+          </div>
+
+          {(() => {
+            const periodos = ['Q1', 'Q2', 'Q3', 'Q4'];
+            const dadosPorPeriodo = periodos.map(periodo => {
+              const campanhasPeriodo = campanhasFiltradas.filter(c => c.periodo.includes(periodo));
+              const planejadoMidia = campanhasPeriodo.reduce((sum, c) => sum + c.planejadoMidia, 0);
+              const realizadoMidia = campanhasPeriodo.reduce((sum, c) => sum + c.realizadoMidia, 0);
+              const planejadoProd = campanhasPeriodo.reduce((sum, c) => sum + c.planejadoProd, 0);
+              const realizadoProd = campanhasPeriodo.reduce((sum, c) => sum + c.realizadoProd, 0);
+              const totalPlanejado = planejadoMidia + planejadoProd;
+              const totalRealizado = realizadoMidia + realizadoProd;
+              const taxaExecucao = totalPlanejado > 0 ? (totalRealizado / totalPlanejado) * 100 : 0;
+              return {
+                periodo,
+                planejadoMidia,
+                realizadoMidia,
+                planejadoProd,
+                realizadoProd,
+                totalPlanejado,
+                totalRealizado,
+                taxaExecucao,
+                totalCampanhas: campanhasPeriodo.length
+              };
+            });
+
+            const maxValor = Math.max(...dadosPorPeriodo.flatMap(d => [d.totalPlanejado, d.totalRealizado])) * 1.2 || 1000000;
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                {/* Gráfico de Barras */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${periodos.length}, 1fr)`,
+                  gap: '16px',
+                  alignItems: 'flex-end',
+                  minHeight: '260px'
+                }}>
+                  {dadosPorPeriodo.map((dados, index) => {
+                    const alturaPlanejado = (dados.totalPlanejado / maxValor) * 180;
+                    const alturaRealizado = (dados.totalRealizado / maxValor) * 180;
+                    const isEstourado = dados.totalRealizado > dados.totalPlanejado;
+                    const status = getStatusExecucao(dados.taxaExecucao, colors);
+
+                    return (
+                      <div key={dados.periodo} style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        height: '100%',
+                        justifyContent: 'flex-end'
+                      }}>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'flex-end',
+                          gap: '6px',
+                          height: '200px',
+                          width: '100%',
+                          justifyContent: 'center',
+                          position: 'relative'
+                        }}>
+                          <div style={{
+                            width: '32px',
+                            background: colors.primary,
+                            height: `${Math.max(alturaPlanejado, 4)}px`,
+                            borderRadius: '6px 6px 0 0',
+                            transition: 'height 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+                            position: 'relative',
+                            boxShadow: '0 2px 8px rgba(0, 150, 94, 0.2)',
+                            minHeight: '4px'
+                          }}>
+                            <div style={{
+                              position: 'absolute',
+                              top: '-20px',
+                              left: '50%',
+                              transform: 'translateX(-50%)',
+                              fontSize: '10px',
+                              fontWeight: '700',
+                              color: colors.primary,
+                              whiteSpace: 'nowrap'
+                            }}>
+                              R$ {dados.totalPlanejado.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                            </div>
+                          </div>
+                          <div style={{
+                            width: '32px',
+                            background: isEstourado ? colors.danger : colors.accent,
+                            height: `${Math.max(alturaRealizado, 4)}px`,
+                            borderRadius: '6px 6px 0 0',
+                            transition: 'height 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.1s',
+                            position: 'relative',
+                            boxShadow: `0 2px 8px ${isEstourado ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 205, 0, 0.3)'}`,
+                            minHeight: '4px'
+                          }}>
+                            <div style={{
+                              position: 'absolute',
+                              top: '-20px',
+                              left: '50%',
+                              transform: 'translateX(-50%)',
+                              fontSize: '10px',
+                              fontWeight: '700',
+                              color: isEstourado ? colors.danger : colors.accentDark,
+                              whiteSpace: 'nowrap'
+                            }}>
+                              R$ {dados.totalRealizado.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ marginTop: '12px', textAlign: 'center', width: '100%' }}>
+                          <div style={{ fontSize: '16px', fontWeight: '700', color: colors.text }}>{dados.periodo}</div>
+                          <div style={{ fontSize: '11px', color: colors.textSecondary, marginTop: '2px' }}>{dados.totalCampanhas} campanhas</div>
+                          <div style={{
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            color: status.cor,
+                            marginTop: '4px',
+                            padding: '2px 8px',
+                            background: status.bg,
+                            borderRadius: '12px',
+                            display: 'inline-block'
+                          }}>
+                            {status.emoji} {dados.taxaExecucao.toFixed(1)}%
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Cards de Resumo por Trimestre */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${periodos.length}, 1fr)`,
+                  gap: '12px',
+                  marginTop: '8px'
+                }}>
+                  {dadosPorPeriodo.map((dados) => {
+                    const status = getStatusExecucao(dados.taxaExecucao, colors);
+                    return (
+                      <div key={dados.periodo} style={{
+                        background: colors.background,
+                        borderRadius: '10px',
+                        padding: '14px',
+                        border: `1px solid ${colors.border}`
+                      }}>
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: '8px'
+                        }}>
+                          <span style={{ fontSize: '12px', fontWeight: '600', color: colors.text }}>{dados.periodo}</span>
+                          <span style={{
+                            fontSize: '11px',
+                            padding: '2px 10px',
+                            borderRadius: '12px',
+                            background: status.bg,
+                            color: status.cor,
+                            fontWeight: '600'
+                          }}>
+                            {status.emoji} {dados.taxaExecucao.toFixed(0)}%
+                          </span>
+                        </div>
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 1fr',
+                          gap: '4px',
+                          fontSize: '11px'
+                        }}>
+                          <span style={{ color: colors.textSecondary }}>📊 Planejado:</span>
+                          <span style={{ fontWeight: '600', textAlign: 'right', color: colors.primary }}>
+                            R$ {dados.totalPlanejado.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                          </span>
+                          <span style={{ color: colors.textSecondary }}>✅ Realizado:</span>
+                          <span style={{ 
+                            fontWeight: '600', 
+                            textAlign: 'right',
+                            color: dados.totalRealizado > dados.totalPlanejado ? colors.danger : colors.success
+                          }}>
+                            R$ {dados.totalRealizado.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                          </span>
+                          <span style={{ color: colors.textSecondary }}>💵 Saldo:</span>
+                          <span style={{ 
+                            fontWeight: '700', 
+                            textAlign: 'right',
+                            color: (dados.totalPlanejado - dados.totalRealizado) >= 0 ? colors.success : colors.danger
+                          }}>
+                            {((dados.totalPlanejado - dados.totalRealizado) >= 0 ? '+' : '')}
+                            R$ {(dados.totalPlanejado - dados.totalRealizado).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* ===== TABELA DE CAMPANHAS ===== */}
         <div style={{
           background: colors.surface,
           borderRadius: '16px',
@@ -1486,7 +1452,7 @@ const salvarNoExcel = async () => {
           )}
         </div>
 
-        {/* Footer com branding e explicação da Taxa de Execução */}
+        {/* ===== FOOTER ===== */}
         <footer style={{
           marginTop: '40px',
           padding: '24px',
@@ -1664,7 +1630,6 @@ const salvarNoExcel = async () => {
               Calculada como: <strong>(Valor Realizado ÷ Valor Planejado) × 100</strong>
             </p>
             
-            {/* Legenda com novos critérios */}
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -1718,7 +1683,6 @@ const salvarNoExcel = async () => {
               </div>
             </div>
 
-            {/* Exemplo prático */}
             <div style={{
               padding: '12px',
               background: `${colors.primary}08`,
@@ -1742,7 +1706,6 @@ const salvarNoExcel = async () => {
             </div>
           </div>
 
-          {/* Branding */}
           <p style={{ margin: 0 }}>
             © 2026 <strong style={{ color: colors.primary }}>Sicoob Cocred</strong> — Cooperativa de Crédito
           </p>
@@ -1752,7 +1715,7 @@ const salvarNoExcel = async () => {
         </footer>
       </main>
 
-      {/* Modal com Pré-visualização dos Saldos */}
+      {/* Modal */}
       {modalAberto && (
         <div
           style={{
@@ -1837,6 +1800,7 @@ const salvarNoExcel = async () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* ... resto do modal (mantido igual) ... */}
               <div>
                 <label style={{
                   display: 'block',
@@ -2093,7 +2057,7 @@ const salvarNoExcel = async () => {
                 </div>
               </div>
 
-              {/* PRÉ-VISUALIZAÇÃO DOS SALDOS */}
+              {/* Pré-visualização dos Saldos */}
               <div style={{
                 background: `linear-gradient(135deg, ${colors.background} 0%, ${colors.surface} 100%)`,
                 borderRadius: '16px',
