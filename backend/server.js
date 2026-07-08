@@ -9,6 +9,7 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3002;
 
+// ============ CORS CONFIGURATION ============
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -42,7 +43,8 @@ function loadUsers() {
     return {
       'admin': { password: 'admin123', name: 'Administrador', role: 'admin' },
       'sicoob': { password: 'cocred2026', name: 'Gestor Sicoob', role: 'gestor' },
-      'gestor': { password: 'gestor456', name: 'Gerente', role: 'gerente' }
+      'gestor': { password: 'gestor456', name: 'Gerente', role: 'gerente' },
+      'cristini.cordesco@ideatoreamericas.com': { password: 'cocred2026', name: 'Cristini Cordesco', role: 'admin' }
     };
   } catch (error) {
     console.error('❌ Erro ao carregar usuários:', error.message);
@@ -52,7 +54,7 @@ function loadUsers() {
 
 let VALID_USERS = loadUsers();
 
-// ============ CONFIGURAÇÃO MICROSOFT GRAPH (COM FALLBACK) ============
+// ============ CONFIGURAÇÃO MICROSOFT GRAPH ============
 
 let graphClient = null;
 let credential = null;
@@ -81,7 +83,8 @@ if (hasSharePointConfig) {
     graphClient = null;
   }
 } else {
-  console.log('⚠️ Variáveis do SharePoint não configuradas.');
+  console.log('⚠️ Variáveis do SharePoint não configuradas. Funcionalidades do SharePoint indisponíveis.');
+  console.log('   Configure TENANT_ID, CLIENT_ID e CLIENT_SECRET no Railway.');
 }
 
 const FILE_ID = process.env.SHAREPOINT_FILE_ID || '';
@@ -384,20 +387,30 @@ async function writeExcelToSharePoint(campanhas, fileUrl) {
   }
 }
 
-// ============ ENDPOINTS ============
+// ============ ROTAS (ORDEM É IMPORTANTE!) ============
 
-// Rota raiz
+// 1. Rota raiz (teste básico)
 app.get('/', (req, res) => {
   res.json({
     message: '🚀 SICOOB COCRED - Backend API',
     version: '2.1.0',
     status: 'online',
+    timestamp: new Date().toISOString(),
+    environment: process.env.RAILWAY_ENVIRONMENT ? 'railway' : 'local',
     sharepoint: hasSharePointConfig ? '✅ Configurado' : '⚠️ Não configurado',
-    users: Object.keys(VALID_USERS).length
+    endpoints: {
+      health: '/api/health',
+      login: '/api/login',
+      usuarios: '/api/usuarios',
+      buscar: '/api/buscar-planilha',
+      salvar: '/api/salvar-campanhas',
+      listar: '/api/listar-arquivos',
+      drive: '/api/drive-info'
+    }
   });
 });
 
-// Health Check
+// 2. Health Check (DEVE SER ANTES DE QUALQUER OUTRA ROTA COM PARÂMETROS)
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'online',
@@ -407,10 +420,28 @@ app.get('/api/health', (req, res) => {
     environment: process.env.RAILWAY_ENVIRONMENT ? 'railway' : 'local',
     sharepoint: {
       configured: hasSharePointConfig,
-      user: USER_EMAIL || '❌',
-      fileId: FILE_ID ? '✅' : '❌'
+      user: process.env.SHAREPOINT_USERNAME || '❌',
+      fileId: process.env.SHAREPOINT_FILE_ID ? '✅' : '❌'
     },
-    users: Object.keys(VALID_USERS).length
+    users: Object.keys(VALID_USERS || {}).length
+  });
+});
+
+// 3. Rota para listar todas as rotas (debug)
+app.get('/api/routes', (req, res) => {
+  const routes = [];
+  app._router.stack.forEach((middleware) => {
+    if (middleware.route) {
+      const methods = Object.keys(middleware.route.methods).join(', ').toUpperCase();
+      routes.push({
+        path: middleware.route.path,
+        methods: methods
+      });
+    }
+  });
+  res.json({ 
+    routes: routes,
+    total: routes.length
   });
 });
 
@@ -438,8 +469,12 @@ app.post('/api/login', async (req, res) => {
     res.json({
       success: true,
       message: 'Login realizado com sucesso!',
-      user: { username, name: user.name, role: user.role },
-      token
+      user: { 
+        username: username, 
+        name: user.name, 
+        role: user.role 
+      },
+      token: token
     });
   } catch (error) {
     console.error('❌ Erro no login:', error);
@@ -466,7 +501,9 @@ app.post('/api/verificar-auth', async (req, res) => {
           }
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      // Token inválido
+    }
     return res.status(401).json({ success: false, error: 'Token inválido' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -567,7 +604,13 @@ app.post('/api/buscar-planilha', async (req, res) => {
       bolsa: row["Bolsa"] || "Avulsa",
       periodo: row["Período"] || "Q1"
     }));
-    res.json({ success: true, data: mappedData, sheetName: result.sheetName, totalRows: mappedData.length });
+    res.json({ 
+      success: true, 
+      data: mappedData, 
+      sheetName: result.sheetName, 
+      totalRows: mappedData.length,
+      originalRows: result.totalRows
+    });
   } else {
     res.status(500).json({ success: false, error: result.error });
   }
@@ -590,7 +633,11 @@ app.post('/api/salvar-campanhas', async (req, res) => {
   
   const result = await writeExcelToSharePoint(campanhas, fileUrl);
   if (result.success) {
-    res.json({ success: true, message: `${result.totalRows} campanhas salvas!`, totalRows: result.totalRows });
+    res.json({ 
+      success: true, 
+      message: `${result.totalRows} campanhas salvas com sucesso!`, 
+      totalRows: result.totalRows 
+    });
   } else {
     res.status(500).json({ success: false, error: result.error });
   }
@@ -610,7 +657,10 @@ app.post('/api/desbloquear-arquivo', async (req, res) => {
     
     const drive = await graphClient.api(`/users/${USER_EMAIL}/drive`).get();
     const result = await forceUnlockFile(drive.id, id);
-    res.json({ success: result, message: result ? 'Arquivo desbloqueado!' : 'Falha ao desbloquear' });
+    res.json({ 
+      success: result, 
+      message: result ? 'Arquivo desbloqueado com sucesso!' : 'Falha ao desbloquear arquivo' 
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -657,10 +707,11 @@ app.post('/api/criar-novo-arquivo', async (req, res) => {
     const fileResponse = await graphClient.api(`/drives/${drive.id}/root:/${fileName}`).get();
     res.json({
       success: true,
-      message: `Arquivo "${fileName}" criado!`,
+      message: `Arquivo "${fileName}" criado com sucesso!`,
       fileId: fileResponse.id,
       fileName: fileResponse.name,
-      driveId: drive.id
+      driveId: drive.id,
+      envUpdate: `SHAREPOINT_FILE_ID=${fileResponse.id}`
     });
   } catch (error) {
     console.error('❌ Erro:', error.message);
@@ -692,7 +743,15 @@ app.get('/api/drive-info', async (req, res) => {
   
   try {
     const drive = await graphClient.api(`/users/${USER_EMAIL}/drive`).get();
-    res.json({ success: true, drive: { id: drive.id, name: drive.name } });
+    res.json({ 
+      success: true, 
+      drive: { 
+        id: drive.id, 
+        name: drive.name,
+        owner: drive.owner,
+        quota: drive.quota
+      } 
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -708,6 +767,7 @@ app.listen(PORT, () => {
 ║  🌍 Ambiente: ${process.env.RAILWAY_ENVIRONMENT ? 'RAILWAY' : 'LOCAL'}
 ║  📊 SharePoint: ${hasSharePointConfig ? '✅ CONFIGURADO' : '⚠️ NÃO CONFIGURADO'}
 ║  👥 Usuários: ${Object.keys(VALID_USERS).length}                     ║
+║  🔗 URL: https://gestao-campanhas-production.up.railway.app          ║
 ╚═══════════════════════════════════════════════════════════════════════╝
   `);
   
@@ -722,4 +782,21 @@ app.listen(PORT, () => {
    - SHAREPOINT_FILE_ID
     `);
   }
+  
+  console.log(`\n📋 Endpoints disponíveis:`);
+  console.log(`   GET  /                - Rota raiz`);
+  console.log(`   GET  /api/health      - Health Check`);
+  console.log(`   GET  /api/routes      - Listar todas as rotas`);
+  console.log(`   POST /api/login       - Login`);
+  console.log(`   POST /api/verificar-auth - Verificar token`);
+  console.log(`   GET  /api/usuarios    - Listar usuários`);
+  console.log(`   POST /api/usuarios    - Criar usuário`);
+  console.log(`   PUT  /api/usuarios/:username - Atualizar usuário`);
+  console.log(`   DELETE /api/usuarios/:username - Deletar usuário`);
+  console.log(`   POST /api/buscar-planilha - Buscar planilha SharePoint`);
+  console.log(`   POST /api/salvar-campanhas - Salvar campanhas no SharePoint`);
+  console.log(`   POST /api/desbloquear-arquivo - Desbloquear arquivo`);
+  console.log(`   POST /api/criar-novo-arquivo - Criar novo arquivo`);
+  console.log(`   GET  /api/listar-arquivos - Listar arquivos do drive`);
+  console.log(`   GET  /api/drive-info  - Informações do drive`);
 });
