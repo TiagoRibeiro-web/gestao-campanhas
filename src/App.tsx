@@ -14,7 +14,8 @@ interface Campanha {
   bolsa: string;
   periodo: string;
 }
-
+// No início do App.tsx, após os imports
+const API_URL = 'https://gestao-camapnhas-cocred.onrender.com';
 const dadosCompletos: Campanha[] = [
   { id: '1', nome: 'Agrishow', planejadoMidia: 132000, realizadoMidia: 131997.51, saldoMidia: 2.49, planejadoProd: 1000, realizadoProd: 4070, saldoProd: -3070, bolsa: 'Despesa', periodo: 'Q2' },
   { id: '2', nome: 'Agronegócio Copercana', planejadoMidia: 19000, realizadoMidia: 19000, saldoMidia: 0, planejadoProd: 1000, realizadoProd: 4235, saldoProd: -3235, bolsa: 'Despesa', periodo: 'Q2' },
@@ -153,7 +154,7 @@ const App: React.FC = () => {
   const sincronizarSharePoint = async () => {
     setCarregando(true);
     try {
-      const response = await fetch('http://localhost:3002/api/buscar-planilha', {
+      const response = await fetch(`${API_URL}/api/buscar-planilha`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -191,7 +192,7 @@ const App: React.FC = () => {
         periodo: rest.periodo
       }));
 
-      const response = await fetch('http://localhost:3002/api/salvar-campanhas', {
+      const response = await fetch(`${API_URL}/api/salvar-campanhas`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ campanhas: dadosParaSalvar })
