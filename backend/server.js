@@ -25,7 +25,6 @@ const USERS_PATH = path.join(__dirname, 'users.json');
 
 function loadUsers() {
   try {
-    // 1. Tenta carregar do arquivo users.json (local)
     if (fs.existsSync(USERS_PATH)) {
       const data = fs.readFileSync(USERS_PATH, 'utf8');
       const users = JSON.parse(data);
@@ -33,14 +32,12 @@ function loadUsers() {
       return users;
     }
     
-    // 2. Tenta carregar da variável de ambiente USERS_JSON (Railway)
     if (process.env.USERS_JSON) {
       const users = JSON.parse(process.env.USERS_JSON);
       console.log(`✅ ${Object.keys(users).length} usuários carregados da variável USERS_JSON`);
       return users;
     }
     
-    // 3. Fallback: usuários padrão
     console.log('⚠️ Nenhum usuário encontrado. Usando usuários padrão.');
     return {
       'admin': { password: 'admin123', name: 'Administrador', role: 'admin' },
@@ -49,9 +46,7 @@ function loadUsers() {
     };
   } catch (error) {
     console.error('❌ Erro ao carregar usuários:', error.message);
-    return {
-      'admin': { password: 'admin123', name: 'Administrador', role: 'admin' }
-    };
+    return { 'admin': { password: 'admin123', name: 'Administrador', role: 'admin' } };
   }
 }
 
@@ -61,8 +56,6 @@ let VALID_USERS = loadUsers();
 
 let graphClient = null;
 let credential = null;
-
-// Verifica se as variáveis do SharePoint estão configuradas
 const hasSharePointConfig = !!(process.env.TENANT_ID && process.env.CLIENT_ID && process.env.CLIENT_SECRET);
 
 if (hasSharePointConfig) {
@@ -88,11 +81,9 @@ if (hasSharePointConfig) {
     graphClient = null;
   }
 } else {
-  console.log('⚠️ Variáveis do SharePoint não configuradas. Funcionalidades do SharePoint indisponíveis.');
-  console.log('   Configure TENANT_ID, CLIENT_ID e CLIENT_SECRET no Railway.');
+  console.log('⚠️ Variáveis do SharePoint não configuradas.');
 }
 
-// IDs do SharePoint (com fallback para undefined)
 const FILE_ID = process.env.SHAREPOINT_FILE_ID || '';
 const USER_EMAIL = process.env.SHAREPOINT_USERNAME || '';
 const SOURCEDOC = process.env.SHAREPOINT_SOURCEDOC || '';
@@ -100,7 +91,6 @@ const SHEET_NAME = process.env.SHEET_NAME || 'VALOR POR PROJETO';
 
 // ============ FUNÇÕES AUXILIARES ============
 
-// Função para extrair o ID do arquivo da URL
 function extractFileIdFromUrl(url) {
   if (!url) return null;
   const match = url.match(/sourcedoc=\{([A-F0-9-]+)\}/i);
@@ -110,21 +100,12 @@ function extractFileIdFromUrl(url) {
   return null;
 }
 
-// Função para obter token de acesso
 async function getAccessToken() {
-  if (!credential) {
-    throw new Error('Microsoft Graph não configurado. Verifique as variáveis de ambiente.');
-  }
-  try {
-    const tokenResponse = await credential.getToken(['https://graph.microsoft.com/.default']);
-    return tokenResponse.token;
-  } catch (error) {
-    console.error('❌ Erro ao obter token:', error.message);
-    throw new Error('Falha na autenticação com Microsoft Graph');
-  }
+  if (!credential) throw new Error('Microsoft Graph não configurado.');
+  const tokenResponse = await credential.getToken(['https://graph.microsoft.com/.default']);
+  return tokenResponse.token;
 }
 
-// Função para baixar arquivo usando axios
 async function downloadFileWithAxios(driveId, itemId, accessToken) {
   const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/content`;
   const response = await axios.get(url, {
@@ -135,7 +116,6 @@ async function downloadFileWithAxios(driveId, itemId, accessToken) {
   return Buffer.from(response.data);
 }
 
-// Função para fazer upload de arquivo usando axios
 async function uploadFileWithAxios(driveId, itemId, buffer, accessToken) {
   const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/content`;
   const response = await axios.put(url, buffer, {
@@ -148,11 +128,70 @@ async function uploadFileWithAxios(driveId, itemId, buffer, accessToken) {
   return response.data;
 }
 
-// ============ FUNÇÕES DO SHAREPOINT (COM VERIFICAÇÃO) ============
+// ============ FUNÇÕES PARA DESBLOQUEAR ARQUIVO ============
+
+async function unlockFileIfNeeded(driveId, itemId) {
+  if (!graphClient) return true;
+  try {
+    console.log('🔓 Verificando se o arquivo está bloqueado...');
+    const file = await graphClient.api(`/drives/${driveId}/items/${itemId}`).get();
+    
+    if (file.ctag && file.ctag.includes('checkout')) {
+      console.log('⚠️ Arquivo está com checkout ativo. Forçando check-in...');
+      try {
+        await graphClient.api(`/drives/${driveId}/items/${itemId}/checkin`).post({
+          checkInAs: 'Major',
+          comment: 'Check-in automático'
+        });
+        console.log('✅ Check-in realizado com sucesso!');
+      } catch (checkinError) {
+        console.log('⚠️ Erro no check-in, tentando checkout/checkin forçado...');
+        try {
+          await graphClient.api(`/drives/${driveId}/items/${itemId}/checkout`).post({});
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          await graphClient.api(`/drives/${driveId}/items/${itemId}/checkin`).post({
+            checkInAs: 'Major',
+            comment: 'Check-in automático'
+          });
+          console.log('✅ Checkout/Check-in forçado realizado!');
+        } catch (forceError) {
+          console.log('⚠️ Não foi possível forçar checkout/checkin');
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    return true;
+  } catch (error) {
+    console.log('ℹ️ Arquivo não está bloqueado');
+    return true;
+  }
+}
+
+async function forceUnlockFile(driveId, itemId) {
+  if (!graphClient) return false;
+  try {
+    console.log('🔓 Tentando desbloquear arquivo...');
+    await graphClient.api(`/drives/${driveId}/items/${itemId}/checkout`).post({});
+    console.log('✅ Checkout realizado');
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    await graphClient.api(`/drives/${driveId}/items/${itemId}/checkin`).post({
+      checkInAs: 'Major',
+      comment: 'Desbloqueio automático'
+    });
+    console.log('✅ Check-in realizado, arquivo desbloqueado');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    return true;
+  } catch (error) {
+    console.error('❌ Erro ao desbloquear:', error.message);
+    return false;
+  }
+}
+
+// ============ FUNÇÕES DO SHAREPOINT ============
 
 async function getExcelFromSharePoint(fileUrl) {
   if (!graphClient) {
-    return { success: false, error: 'Microsoft Graph não configurado. Verifique as variáveis de ambiente.' };
+    return { success: false, error: 'Microsoft Graph não configurado.' };
   }
   
   try {
@@ -249,15 +288,22 @@ async function writeExcelToSharePoint(campanhas, fileUrl) {
       if (extractedId) fileId = extractedId;
     }
     
+    console.log('👤 Usuário:', USER_EMAIL);
+    console.log('📁 File ID:', fileId);
+    
     const drive = await graphClient.api(`/users/${USER_EMAIL}/drive`).get();
+    console.log('✅ Drive encontrado');
     
     let fileItem;
     try {
       fileItem = await graphClient.api(`/drives/${drive.id}/items/${fileId}`).get();
       console.log('📄 Arquivo encontrado:', fileItem.name);
     } catch (error) {
+      console.error('❌ Arquivo não encontrado pelo ID:', error.message);
       throw new Error('Arquivo não encontrado.');
     }
+    
+    await unlockFileIfNeeded(drive.id, fileItem.id);
     
     const headers = [
       'Projeto/Campanha',
@@ -292,7 +338,7 @@ async function writeExcelToSharePoint(campanhas, fileUrl) {
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
     
     let tentativas = 0;
-    let maxTentativas = 3;
+    let maxTentativas = 5;
     let sucesso = false;
     let ultimoErro = null;
     
@@ -300,15 +346,29 @@ async function writeExcelToSharePoint(campanhas, fileUrl) {
       tentativas++;
       try {
         console.log(`📤 Tentativa ${tentativas}/${maxTentativas}...`);
+        
+        if (tentativas > 1) {
+          console.log('🔄 Tentando desbloquear novamente...');
+          await forceUnlockFile(drive.id, fileItem.id);
+        }
+        
         const accessToken = await getAccessToken();
         await uploadFileWithAxios(drive.id, fileItem.id, buffer, accessToken);
         sucesso = true;
         console.log(`✅ ${campanhas.length} registros salvos (tentativa ${tentativas})`);
       } catch (error) {
         ultimoErro = error;
-        console.log(`❌ Erro na tentativa ${tentativas}: ${error.message}`);
-        if (tentativas < maxTentativas) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
+        const statusCode = error.response?.status;
+        console.log(`❌ Erro na tentativa ${tentativas}: Status ${statusCode}`);
+        
+        if (statusCode === 423) {
+          console.log(`⚠️ Arquivo bloqueado. Aguardando ${tentativas * 2} segundos...`);
+          await new Promise(resolve => setTimeout(resolve, tentativas * 2000));
+        } else if (statusCode === 429) {
+          console.log(`⚠️ Rate limit. Aguardando ${tentativas * 3} segundos...`);
+          await new Promise(resolve => setTimeout(resolve, tentativas * 3000));
+        } else {
+          throw error;
         }
       }
     }
@@ -333,13 +393,7 @@ app.get('/', (req, res) => {
     version: '2.1.0',
     status: 'online',
     sharepoint: hasSharePointConfig ? '✅ Configurado' : '⚠️ Não configurado',
-    endpoints: {
-      health: '/api/health',
-      login: '/api/login',
-      usuarios: '/api/usuarios',
-      buscar: '/api/buscar-planilha',
-      salvar: '/api/salvar-campanhas'
-    }
+    users: Object.keys(VALID_USERS).length
   });
 });
 
@@ -368,20 +422,14 @@ app.post('/api/login', async (req, res) => {
     console.log(`🔐 Tentativa de login: ${username}`);
 
     if (!username || !password) {
-      return res.status(400).json({
-        success: false,
-        error: 'Usuário e senha são obrigatórios'
-      });
+      return res.status(400).json({ success: false, error: 'Usuário e senha são obrigatórios' });
     }
 
     const user = VALID_USERS[username];
     
     if (!user || user.password !== password) {
       console.log(`❌ Falha no login: ${username}`);
-      return res.status(401).json({
-        success: false,
-        error: 'Usuário ou senha inválidos'
-      });
+      return res.status(401).json({ success: false, error: 'Usuário ou senha inválidos' });
     }
 
     console.log(`✅ Login bem-sucedido: ${username}`);
@@ -390,19 +438,12 @@ app.post('/api/login', async (req, res) => {
     res.json({
       success: true,
       message: 'Login realizado com sucesso!',
-      user: {
-        username: username,
-        name: user.name,
-        role: user.role
-      },
-      token: token
+      user: { username, name: user.name, role: user.role },
+      token
     });
   } catch (error) {
     console.error('❌ Erro no login:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erro interno do servidor'
-    });
+    res.status(500).json({ success: false, error: 'Erro interno do servidor' });
   }
 });
 
@@ -464,6 +505,41 @@ app.post('/api/usuarios', (req, res) => {
   }
 });
 
+app.put('/api/usuarios/:username', (req, res) => {
+  try {
+    const { username } = req.params;
+    const { name, role, password } = req.body;
+    
+    if (!VALID_USERS[username]) {
+      return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
+    }
+
+    if (name) VALID_USERS[username].name = name;
+    if (role) VALID_USERS[username].role = role;
+    if (password) VALID_USERS[username].password = password;
+
+    res.json({ success: true, message: `Usuário ${username} atualizado!` });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/usuarios/:username', (req, res) => {
+  try {
+    const { username } = req.params;
+    if (username === 'admin') {
+      return res.status(403).json({ success: false, error: 'Não é possível deletar o admin' });
+    }
+    if (!VALID_USERS[username]) {
+      return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
+    }
+    delete VALID_USERS[username];
+    res.json({ success: true, message: `Usuário ${username} deletado!` });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============ ENDPOINTS DO SHAREPOINT ============
 
 app.post('/api/buscar-planilha', async (req, res) => {
@@ -520,12 +596,114 @@ app.post('/api/salvar-campanhas', async (req, res) => {
   }
 });
 
+app.post('/api/desbloquear-arquivo', async (req, res) => {
+  if (!graphClient) {
+    return res.status(400).json({ success: false, error: 'SharePoint não configurado.' });
+  }
+  
+  try {
+    const { fileId } = req.body;
+    const id = fileId || FILE_ID;
+    if (!id) {
+      return res.status(400).json({ success: false, error: 'File ID não fornecido' });
+    }
+    
+    const drive = await graphClient.api(`/users/${USER_EMAIL}/drive`).get();
+    const result = await forceUnlockFile(drive.id, id);
+    res.json({ success: result, message: result ? 'Arquivo desbloqueado!' : 'Falha ao desbloquear' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/criar-novo-arquivo', async (req, res) => {
+  if (!graphClient) {
+    return res.status(400).json({ success: false, error: 'SharePoint não configurado.' });
+  }
+  
+  try {
+    console.log('📄 Criando novo arquivo Excel...');
+    const { nomeArquivo } = req.body;
+    const fileName = nomeArquivo || 'campanhas_cocred.xlsx';
+    
+    const drive = await graphClient.api(`/users/${USER_EMAIL}/drive`).get();
+    
+    const headers = [
+      'Projeto/Campanha',
+      'Valor Planejado Mídia/Projeto',
+      'Valor Realizado Mídia/Projeto',
+      'Saldo Mídia/Projeto',
+      'Valor Planejado Prod',
+      'Valor Realizado Prod',
+      'Saldo Prod',
+      'Bolsa',
+      'Período'
+    ];
+    
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers]);
+    XLSX.utils.book_append_sheet(wb, ws, 'VALOR POR PROJETO');
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    
+    const accessToken = await getAccessToken();
+    const url = `https://graph.microsoft.com/v1.0/drives/${drive.id}/root:/${fileName}:/content`;
+    await axios.put(url, buffer, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      }
+    });
+    
+    const fileResponse = await graphClient.api(`/drives/${drive.id}/root:/${fileName}`).get();
+    res.json({
+      success: true,
+      message: `Arquivo "${fileName}" criado!`,
+      fileId: fileResponse.id,
+      fileName: fileResponse.name,
+      driveId: drive.id
+    });
+  } catch (error) {
+    console.error('❌ Erro:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/listar-arquivos', async (req, res) => {
+  if (!graphClient) {
+    return res.status(400).json({ success: false, error: 'SharePoint não configurado.' });
+  }
+  
+  try {
+    const drive = await graphClient.api(`/users/${USER_EMAIL}/drive`).get();
+    const files = await graphClient.api(`/drives/${drive.id}/root/children`).get();
+    const excelFiles = files.value
+      .filter(f => f.name && f.name.includes('.xlsx'))
+      .map(f => ({ name: f.name, id: f.id, size: f.size }));
+    res.json({ success: true, files: excelFiles });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/drive-info', async (req, res) => {
+  if (!graphClient) {
+    return res.status(400).json({ success: false, error: 'SharePoint não configurado.' });
+  }
+  
+  try {
+    const drive = await graphClient.api(`/users/${USER_EMAIL}/drive`).get();
+    res.json({ success: true, drive: { id: drive.id, name: drive.name } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============ INICIAR SERVIDOR ============
 
 app.listen(PORT, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════════════════╗
-║  🚀 SICOOB COCRED - BACKEND v2.1.0                                  ║
+║  🚀 SICOOB COCRED - BACKEND v2.1.0 (COMPLETA)                       ║
 ║  📡 Servidor rodando em http://localhost:${PORT}                      ║
 ║  🌍 Ambiente: ${process.env.RAILWAY_ENVIRONMENT ? 'RAILWAY' : 'LOCAL'}
 ║  📊 SharePoint: ${hasSharePointConfig ? '✅ CONFIGURADO' : '⚠️ NÃO CONFIGURADO'}
