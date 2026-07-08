@@ -387,9 +387,9 @@ async function writeExcelToSharePoint(campanhas, fileUrl) {
   }
 }
 
-// ============ ROTAS (ORDEM É IMPORTANTE!) ============
+// ============ ROTAS ============
 
-// 1. Rota raiz (teste básico)
+// 1. Rota raiz
 app.get('/', (req, res) => {
   res.json({
     message: '🚀 SICOOB COCRED - Backend API',
@@ -410,7 +410,7 @@ app.get('/', (req, res) => {
   });
 });
 
-// 2. Health Check (DEVE SER ANTES DE QUALQUER OUTRA ROTA COM PARÂMETROS)
+// 2. Health Check
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'online',
@@ -510,21 +510,42 @@ app.post('/api/verificar-auth', async (req, res) => {
   }
 });
 
-// ============ ENDPOINTS DE USUÁRIOS ============
+// ============ ENDPOINT DE USUÁRIOS (NOVO!) ============
 
 app.get('/api/usuarios', (req, res) => {
   try {
-    const users = Object.keys(VALID_USERS).map(username => ({
-      username: username,
-      name: VALID_USERS[username].name,
-      role: VALID_USERS[username].role,
-      hasPassword: !!VALID_USERS[username].password
-    }));
-    res.json({ success: true, users });
+    // Pega os usuários da variável USERS_JSON ou do arquivo users.json
+    let users = [];
+    
+    if (process.env.USERS_JSON) {
+      const usersData = JSON.parse(process.env.USERS_JSON);
+      users = Object.keys(usersData).map(username => ({
+        username: username,
+        name: usersData[username].name,
+        role: usersData[username].role || 'usuario'
+      }));
+    } else {
+      // Fallback para usuários padrão
+      users = Object.keys(VALID_USERS).map(username => ({
+        username: username,
+        name: VALID_USERS[username].name,
+        role: VALID_USERS[username].role || 'usuario'
+      }));
+    }
+    
+    res.json({
+      success: true,
+      users: users
+    });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 });
+
+// ============ ENDPOINTS PARA GERENCIAR USUÁRIOS ============
 
 app.post('/api/usuarios', (req, res) => {
   try {
@@ -585,7 +606,7 @@ app.post('/api/buscar-planilha', async (req, res) => {
   if (!hasSharePointConfig) {
     return res.status(400).json({
       success: false,
-      error: 'SharePoint não configurado. Configure as variáveis de ambiente no Railway.'
+      error: 'SharePoint não configurado. Configure as variáveis de ambiente no Render.'
     });
   }
   
@@ -622,7 +643,7 @@ app.post('/api/salvar-campanhas', async (req, res) => {
   if (!hasSharePointConfig) {
     return res.status(400).json({
       success: false,
-      error: 'SharePoint não configurado. Configure as variáveis de ambiente no Railway.'
+      error: 'SharePoint não configurado. Configure as variáveis de ambiente no Render.'
     });
   }
   
@@ -767,14 +788,14 @@ app.listen(PORT, () => {
 ║  🌍 Ambiente: ${process.env.RAILWAY_ENVIRONMENT ? 'RAILWAY' : 'LOCAL'}
 ║  📊 SharePoint: ${hasSharePointConfig ? '✅ CONFIGURADO' : '⚠️ NÃO CONFIGURADO'}
 ║  👥 Usuários: ${Object.keys(VALID_USERS).length}                     ║
-║  🔗 URL: https://gestao-campanhas-production.up.railway.app          ║
+║  🔗 URL: https://gestao-camapnhas-cocred.onrender.com               ║
 ╚═══════════════════════════════════════════════════════════════════════╝
   `);
   
   if (!hasSharePointConfig) {
     console.log(`
 ⚠️  ATENÇÃO: SharePoint não configurado!
-   Para usar o SharePoint, configure no Railway:
+   Para usar o SharePoint, configure no Render:
    - TENANT_ID
    - CLIENT_ID
    - CLIENT_SECRET
@@ -789,7 +810,7 @@ app.listen(PORT, () => {
   console.log(`   GET  /api/routes      - Listar todas as rotas`);
   console.log(`   POST /api/login       - Login`);
   console.log(`   POST /api/verificar-auth - Verificar token`);
-  console.log(`   GET  /api/usuarios    - Listar usuários`);
+  console.log(`   GET  /api/usuarios    - Listar usuários (NOVO!)`);
   console.log(`   POST /api/usuarios    - Criar usuário`);
   console.log(`   PUT  /api/usuarios/:username - Atualizar usuário`);
   console.log(`   DELETE /api/usuarios/:username - Deletar usuário`);
