@@ -12,6 +12,7 @@ app.use(express.json());
 // ============ USUÁRIOS ============
 const VALID_USERS = {
   'admin': { password: 'admin123', name: 'Administrador', role: 'admin' },
+  'julia.sidney': { password: 'SidId321@', name: 'Julia Sidney', role: 'admin' },
   'sicoob': { password: 'cocred2026', name: 'Gestor Sicoob', role: 'gestor' },
   'cristini.cordesco@ideatoreamericas.com': { password: 'cocred2026', name: 'Cristini Cordesco', role: 'admin' }
 };
