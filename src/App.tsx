@@ -15,7 +15,7 @@ interface Campanha {
   periodo: string;
 }
 // No início do App.tsx, após os imports
-const API_URL = 'https://gestao-camapnhas-cocred.onrender.com';
+const API_URL = 'https://gestao-campanhas-832s.onrender.com';
 const dadosCompletos: Campanha[] = [
   { id: '1', nome: 'Agrishow', planejadoMidia: 132000, realizadoMidia: 131997.51, saldoMidia: 2.49, planejadoProd: 1000, realizadoProd: 4070, saldoProd: -3070, bolsa: 'Despesa', periodo: 'Q2' },
   { id: '2', nome: 'Agronegócio Copercana', planejadoMidia: 19000, realizadoMidia: 19000, saldoMidia: 0, planejadoProd: 1000, realizadoProd: 4235, saldoProd: -3235, bolsa: 'Despesa', periodo: 'Q2' },
