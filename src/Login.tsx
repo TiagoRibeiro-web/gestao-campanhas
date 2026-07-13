@@ -11,6 +11,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // 🔥 URL do backend no Render
+  const API_URL = 'https://gestao-campanhas-832s.onrender.com';
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -24,7 +27,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     }
 
     try {
-      const response = await fetch('http://localhost:3002/api/login', {
+      // 🔥 AGORA USA A URL DO RENDER
+      const response = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -44,7 +48,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       }
     } catch (error) {
       console.error('Erro no login:', error);
-      setError('Erro ao conectar ao servidor. Verifique se o backend está rodando.');
+      setError('Erro ao conectar ao servidor. Verifique sua conexão.');
     } finally {
       setLoading(false);
     }
